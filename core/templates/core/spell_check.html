@@ -1,0 +1,32 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Spell Check</title>
+</head>
+<body>
+    <h1>Spell Check</h1>
+
+        <h2>Spell Check Results</h2>
+        <form method="POST">
+            {% csrf_token %}
+            <textarea name="text" rows="5" cols="50">{{ original }}</textarea>
+            <button type="submit">Check Spelling</button>
+        </form>
+        {% if corrected %}
+            <h3>Corrected Text:</h3>
+            <p>{{ corrected }}</p>
+        {% endif %}
+        {% if errors %}
+            <h3>Spelling Errors:</h3>
+            <ul>
+            {% for error in errors %}
+                <li>Word: "{{ error.word }}" - {{ error.message }}<br>
+                    Suggestions: {{ error.suggestions|join:", " }}</li>
+            {% endfor %}
+            </ul>
+        {% endif %}
+
+    <a href="{% url 'home' %}">Back to Home</a>
+</body>
+</html> 
+

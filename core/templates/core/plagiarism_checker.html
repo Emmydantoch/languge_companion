@@ -1,0 +1,33 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Plagiarism Checker</title>
+</head>
+<body>
+        <h2>Plagiarism Checker</h2>
+    <form method="POST">
+        {% csrf_token %}
+        <textarea name="text" rows="5" cols="50">{{ original }}</textarea>
+        <button type="submit">Check Plagiarism</button>
+    </form>
+    {% if plagiarism_report %}
+        <h3>Plagiarism Report:</h3>
+        <p>{{ plagiarism_report }}</p>
+    {% endif %}
+    {% if similarity_results %}
+        <h3>Similar Content Found:</h3>
+        <ul>
+        {% for result in similarity_results %}
+            <li>Source: {{ result.source }}<br>
+                Similarity: {{ result.similarity }}<br>
+                Text: {{ result.text|truncatewords:30 }}</li>
+        {% endfor %}
+        </ul>
+    {% endif %}
+    {% if error %}
+        <p style="color: red;">{{ error }}</p>
+    {% endif %}
+
+    <a href="{% url 'home' %}">Back to Home</a>
+</body>
+</html>

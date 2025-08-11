@@ -1,0 +1,19 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Grammar Check</title>
+</head>
+<body>
+    <h1>Grammar Check</h1>
+    <form method="post">
+      {% csrf_token %}
+      <textarea name="text" rows="5" cols="60" placeholder="Type something..."></textarea><br>
+      <button type="submit">Check Grammar</button>
+    </form>
+
+    {% if corrected %}
+      <h3>Corrected Text:</h3>
+      <p>{{ corrected }}</p>
+    {% endif %}
+</body>
+</html>

@@ -1,0 +1,24 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Text Summarization</title>
+</head>
+<body>
+   <h2>Text Summarization</h2>
+<form method="POST">
+    {% csrf_token %}
+    <textarea name="text" rows="5" cols="50" placeholder="Enter text to summarize">{{ input_text }}</textarea>
+    <button type="submit">Summarize</button>
+</form>
+{% if summary_text %}
+    <h3>Summary:</h3>
+    <p>{{ summary_text }}</p>
+{% endif %}
+{% if error %}
+    <p style="color: red;">{{ error }}</p>
+{% endif %}
+
+    <a href="{% url 'home' %}">Back to Home</a>
+</body>
+</html> 
+

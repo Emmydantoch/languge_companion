@@ -1,0 +1,37 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Translate</title>
+</head>
+<body>
+    <h2>Translation</h2>
+<form method="POST">
+    {% csrf_token %}
+    <textarea name="text" rows="5" cols="50">{{ original }}</textarea>
+    <select name="target_lang">
+        <option value="en" {% if target_lang == "en" %}selected{% endif %}>English</option>
+        <option value="es" {% if target_lang == "es" %}selected{% endif %}>Spanish</option>
+        <option value="fr" {% if target_lang == "fr" %}selected{% endif %}>French</option>
+        <option value="de" {% if target_lang == "de" %}selected{% endif %}>German</option>
+        <option value="it" {% if target_lang == "it" %}selected{% endif %}>Italian</option>
+        <option value="pt" {% if target_lang == "pt" %}selected{% endif %}>Portuguese</option>
+        <option value="ru" {% if target_lang == "ru" %}selected{% endif %}>Russian</option>
+        <option value="zh" {% if target_lang == "zh" %}selected{% endif %}>Chinese</option>
+        <option value="ja" {% if target_lang == "ja" %}selected{% endif %}>Japanese</option>
+        <option value="ko" {% if target_lang == "ko" %}selected{% endif %}>Korean</option>  
+        <option value="ar" {% if target_lang == "ar" %}selected{% endif %}>Arabic</option>
+        <!-- Add more languages as supported by your API -->
+    </select>
+    <button type="submit">Translate</button>
+</form>
+{% if translated %}
+    <h3>Translated Text:</h3>
+    <p>{{ translated }}</p>
+{% endif %}
+{% if error %}
+    <p style="color: red;">{{ error }}</p>
+{% endif %}
+
+    <a href="{% url 'home' %}">Back to Home</a>
+</body>
+</html>
