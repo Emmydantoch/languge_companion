@@ -15,7 +15,7 @@ from transformers import pipeline
 summarizer = pipeline("summarization", model="facebook/bart-large-cnn")
 
 def home(request):
-    return render(request, "core/home.html")
+    return render(request, "app/home.html")
 
 
 def grammar_check(request):
@@ -25,7 +25,7 @@ def grammar_check(request):
         tool = language_tool_python.LanguageTool("en-US")
         matches = tool.check(text)
         corrected = language_tool_python.utils.correct(text, matches)
-    return render(request, "core/grammar.html", {"corrected": corrected})
+    return render(request, "app/grammar.html", {"corrected": corrected})
 
 def spell_check(request):
     corrected = ""
@@ -55,7 +55,7 @@ def spell_check(request):
         finally:
             tool.close()  # Close the LanguageTool instance to free resources
     
-    return render(request, "core/spell_check.html", {
+    return render(request, "app/spell_check.html", {
         "corrected": corrected,
         "errors": errors,  # Pass errors for display in template
         "original": text
@@ -85,7 +85,7 @@ def translation(request):
                 error = f"Translation error: {str(e)}"
                 translated = text
     
-    return render(request, "core/translation.html", {
+    return render(request, "app/translation.html", {
         "translated": translated,
         "error": error,
         "original": text,
@@ -143,7 +143,7 @@ def plagiarism_checker(request):
             except Exception as e:
                 plagiarism_report = f"Error checking plagiarism: {str(e)}"
     
-    return render(request, "core/plagiarism_checker.html", {
+    return render(request, "app/plagiarism_checker.html", {
         "plagiarism_report": plagiarism_report,
         "similarity_results": similarity_results,
         "original": text
@@ -185,7 +185,7 @@ def text_summarization(request):
             except Exception as e:
                 error = f"Error summarizing text: {str(e)}"
                 summary_text = input_text
-    return render(request, "core/text_summarization.html", {
+    return render(request, "app/text_summarization.html", {
         "summary_text": summary_text,
         "error": error,
         "input_text": input_text
