@@ -36,12 +36,14 @@ sympy==1.14.0
 threadpoolctl==3.6.0
 tokenizers==0.21.4
 toml==0.10.2
-torch==2.8.0
-torchaudio==2.8.0
-torchvision==0.23.0
 tqdm==4.67.1
-transformers==4.55.0
 typing_extensions==4.14.1
 tzdata==2025.2
 urllib3==2.5.0
 whitenoise==6.9.0
+
+# Heavy ML libraries commented out to reduce memory usage
+# torch==2.8.0
+# torchaudio==2.8.0
+# torchvision==0.23.0
+# transformers==4.55.0

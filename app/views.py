@@ -3,16 +3,13 @@ from django.http import HttpResponse
 import language_tool_python
 import deepl
 from deep_translator import GoogleTranslator
-from sklearn.feature_extraction.text import TfidfVectorizer
-from sklearn.metrics.pairwise import cosine_similarity
 import requests
 from bs4 import BeautifulSoup
-from transformers import pipeline
 
-
-
-# paraphraser = pipeline("text2text-generation", model="t5-small", use_fast=False)
-summarizer = pipeline("summarization", model="facebook/bart-large-cnn")
+# Remove heavy imports from top level to reduce memory usage
+# from sklearn.feature_extraction.text import TfidfVectorizer
+# from sklearn.metrics.pairwise import cosine_similarity
+# from transformers import pipeline
 
 def home(request):
     return render(request, "app/home.html")
@@ -105,6 +102,10 @@ def plagiarism_checker(request):
             plagiarism_report = "Please enter some text to check for plagiarism"
         else:
             try:
+                # Import heavy libraries only when needed
+                from sklearn.feature_extraction.text import TfidfVectorizer
+                from sklearn.metrics.pairwise import cosine_similarity
+                
                 # Step 1: Search for similar content online (simplified Google search)
                 query = text[:100].replace(" ", "+")  # Limit query length
                 url = f"https://www.google.com/search?q={query}"
@@ -150,7 +151,6 @@ def plagiarism_checker(request):
     })
 
 
-
 # Global variables to store model pipelines (lazy-loaded)
 summarizer = None
 
@@ -158,6 +158,8 @@ def init_summarizer():
     global summarizer
     if summarizer is None:
         try:
+            # Import transformers only when needed
+            from transformers import pipeline
             summarizer = pipeline("summarization", model="facebook/bart-large-cnn")
         except Exception as e:
             print(f"Error loading summarizer model: {e}")
@@ -178,13 +180,23 @@ def text_summarization(request):
                 # Initialize or get summarizer model
                 model = init_summarizer()
                 if model is None:
-                    error = "Summarization model not available."
+                    # Fallback: simple text truncation if ML model is not available
+                    if len(input_text) > 150:
+                        summary_text = input_text[:150] + "..."
+                        error = "ML summarization not available. Showing truncated text instead."
+                    else:
+                        summary_text = input_text
+                        error = "ML summarization not available. Showing original text."
                 else:
                     result = model(input_text, max_length=150, min_length=30, do_sample=False)
                     summary_text = result[0]["summary_text"]
             except Exception as e:
                 error = f"Error summarizing text: {str(e)}"
-                summary_text = input_text
+                # Fallback: simple text truncation
+                if len(input_text) > 150:
+                    summary_text = input_text[:150] + "..."
+                else:
+                    summary_text = input_text
     return render(request, "app/text_summarization.html", {
         "summary_text": summary_text,
         "error": error,

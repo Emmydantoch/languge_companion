@@ -28,7 +28,7 @@ SECRET_KEY = "django-insecure-!g!it7%wl7#@s78guy++0rp$=n(h6nyy)tyhf^^_h*v8_p(_gt
 # SECURITY WARNING: don't run with debug turned on in production!
 DEBUG = True
 
-ALLOWED_HOSTS = ['https://languge-companion.onrender.com']  # For testing; replace with your Render domain (e.g., '*.onrender.com') in production
+ALLOWED_HOSTS = ['languge-companion.onrender.com', '.onrender.com', 'localhost', '127.0.0.1']
 
 
 # Application definition
