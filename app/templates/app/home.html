@@ -1,36 +1,342 @@
+{% load static %}
 <!DOCTYPE html>
 <html>
 <head>
     <title>AI Magic Companion</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            margin: 0;
+            padding: 0;
+            background-color: #000;
+            overflow-x: hidden;
+        }
+
+        /* Video Background Screensaver */
+        .video-background {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            z-index: -1;
+            overflow: hidden;
+        }
+
+        .video-background video {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            min-width: 100%;
+            min-height: 100%;
+            width: auto;
+            height: auto;
+            transform: translate(-50%, -50%);
+            object-fit: cover;
+            filter: brightness(0.3) contrast(1.2);
+        }
+
+        /* Overlay for better text readability */
+        .overlay {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: linear-gradient(135deg, rgba(0,0,0,0.7) 0%, rgba(0,0,0,0.4) 50%, rgba(0,0,0,0.7) 100%);
+            z-index: -1;
+        }
+
+        .container {
+            display: flex;
+            align-items: flex-start;
+            padding: 40px;
+            gap: 30px;
+            position: relative;
+            z-index: 1;
+            min-height: 100vh;
+        }
+
+        .links-section {
+            flex: 1;
+            max-width: 50%;
+            background: rgba(255, 255, 255, 0.95);
+            padding: 30px;
+            border-radius: 15px;
+            box-shadow: 0 8px 32px rgba(0,0,0,0.3);
+            backdrop-filter: blur(10px);
+            border: 1px solid rgba(255, 255, 255, 0.2);
+            transition: all 0.3s ease;
+        }
+
+        .links-section:hover {
+            transform: translateY(-5px);
+            box-shadow: 0 12px 40px rgba(0,0,0,0.4);
+        }
+
+        .video-section {
+            flex: 1;
+            max-width: 50%;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            background: rgba(255, 255, 255, 0.95);
+            padding: 30px;
+            border-radius: 15px;
+            box-shadow: 0 8px 32px rgba(0,0,0,0.3);
+            backdrop-filter: blur(10px);
+            border: 1px solid rgba(255, 255, 255, 0.2);
+            transition: all 0.3s ease;
+        }
+
+        .video-section:hover {
+            transform: translateY(-5px);
+            box-shadow: 0 12px 40px rgba(0,0,0,0.4);
+        }
+
+        .screensaver-content {
+            text-align: center;
+            color: #333;
+        }
+
+        .screensaver-title {
+            font-size: 2.5em;
+            font-weight: bold;
+            margin-bottom: 20px;
+            background: linear-gradient(45deg, #007bff, #00d4ff, #007bff);
+            background-size: 200% 200%;
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+            animation: gradient-shift 3s ease-in-out infinite;
+        }
+
+        @keyframes gradient-shift {
+            0%, 100% { background-position: 0% 50%; }
+            50% { background-position: 100% 50%; }
+        }
+
+        .screensaver-subtitle {
+            font-size: 1.2em;
+            color: #666;
+            margin-bottom: 30px;
+        }
+
+        .floating-icons {
+            display: flex;
+            justify-content: center;
+            gap: 20px;
+            margin-top: 30px;
+        }
+
+        .floating-icon {
+            width: 60px;
+            height: 60px;
+            background: linear-gradient(45deg, #007bff, #00d4ff);
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: white;
+            font-size: 24px;
+            animation: float 3s ease-in-out infinite;
+            box-shadow: 0 4px 15px rgba(0,123,255,0.3);
+        }
+
+        .floating-icon:nth-child(2) {
+            animation-delay: 0.5s;
+        }
+
+        .floating-icon:nth-child(3) {
+            animation-delay: 1s;
+        }
+
+        @keyframes float {
+            0%, 100% { transform: translateY(0px); }
+            50% { transform: translateY(-10px); }
+        }
+
+        h1, h2 {
+            color: #333;
+            margin-top: 0;
+            text-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+
+        p {
+            line-height: 1.6;
+            color: #666;
+        }
+
+        ul {
+            list-style-type: none;
+            padding: 0;
+        }
+
+        li {
+            background: rgba(248, 249, 250, 0.8);
+            margin: 12px 0;
+            padding: 15px;
+            border: 1px solid rgba(233, 236, 239, 0.8);
+            border-radius: 10px;
+            transition: all 0.3s ease;
+            backdrop-filter: blur(5px);
+        }
+
+        li:hover {
+            background: rgba(233, 236, 239, 0.9);
+            transform: translateY(-3px);
+            box-shadow: 0 6px 20px rgba(0,0,0,0.15);
+            border-color: #007bff;
+        }
+
+        a {
+            text-decoration: none;
+            color: #007bff;
+            font-size: 16px;
+            font-weight: 500;
+            display: block;
+            transition: color 0.3s ease;
+        }
+
+        a:hover {
+            color: #0056b3;
+        }
+
+        footer {
+            text-align: center;
+            padding: 30px;
+            color: rgba(255, 255, 255, 0.8);
+            margin-top: 40px;
+            position: relative;
+            z-index: 1;
+            background: rgba(0, 0, 0, 0.3);
+            backdrop-filter: blur(10px);
+        }
+
+        /* Responsive design */
+        @media (max-width: 768px) {
+            .container {
+                flex-direction: column;
+                padding: 20px;
+            }
+            
+            .links-section,
+            .video-section {
+                max-width: 100%;
+                margin-bottom: 20px;
+            }
+
+            .screensaver-title {
+                font-size: 2em;
+            }
+
+            .floating-icons {
+                gap: 15px;
+            }
+
+            .floating-icon {
+                width: 50px;
+                height: 50px;
+                font-size: 20px;
+            }
+        }
+
+        /* Loading animation for video */
+        .video-loading {
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            height: 200px;
+            color: #666;
+        }
+
+        .spinner {
+            width: 40px;
+            height: 40px;
+            border: 4px solid #f3f3f3;
+            border-top: 4px solid #007bff;
+            border-radius: 50%;
+            animation: spin 1s linear infinite;
+        }
+
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+    </style>
 </head>
 <body>
-    <h1>Welcome to AI Magic Companion!</h1>
-    <p>This is your homepage. Use the navigation below:</p>
-    <h2>We are here to make your life easier with AI tools</h2>
-    <ul>
-        <li><a href="{% url 'grammar_check' %}">Grammar Check</a></li>
-        <li><a href="{% url 'spell_check' %}">Spell Check</a></li>
-        <li><a href="{% url 'translation' %}">Translation</a></li>
-        <li><a href="{% url 'plagiarism_checker' %}">Plagiarism Checker</a></li>
-        <li><a href="{% url 'text_summarization' %}">Text Summarization</a></li>
-        {% comment %} <li><a href="{% url 'language_learning' %}">Language Learning</a></li>
-        <li><a href="{% url 'text_generation' %}">Text Generation</a></li>
-        <li><a href="{% url 'text_to_speech' %}">Text to Speech</a></li>
-        <li><a href="{% url 'speech_to_text' %}">Speech to  Text</a></li>
-        <li><a href="{% url 'language_modeling' %}">Language Modeling</a></li> 
-        <li><a href="{% url 'content_creation' %}">Content Creation</a></li>  
-        <li><a href="{% url 'data_analysis' %}">Data Analysis</a></li>
-        <li><a href="{% url 'ai_chatbot' %}">AI Chatbot</a></li>   
-        
-        <li><a href="{% url 'contact_support' %}">Contact Support</a></li> {% endcomment %}
-        
-        <!-- Add more links as needed -->
-    </ul>
+    <!-- Video Background Screensaver -->
+    {% comment %} <div class="video-background">
+        <video autoplay muted loop>
+            <source src="{% static 'app/videos/hum_AI.mp4' %}" type="video/mp4">
+            <source src="{% static 'app/videos/hum_AI.webm' %}" type="video/webm">
+        </video>
+    </div> {% endcomment %}
     
+    <!-- Overlay for better readability -->
+    <div class="overlay"></div>
 
+    <div class="container">
+        <div class="links-section">
+            <h1>Welcome to AI Magic Companion!</h1>
+            <p>This is your homepage. Use the navigation below:</p>
+            
+            <h2>We are here to make your life easier with AI tools</h2>
+            <ul>
+                <li><a href="{% url 'grammar_check' %}">Grammar Check</a></li>
+                <li><a href="{% url 'spell_check' %}">Spell Check</a></li>
+                <li><a href="{% url 'translation' %}">Translation</a></li>
+                <li><a href="{% url 'plagiarism_checker' %}">Plagiarism Checker</a></li>
+                <li><a href="{% url 'text_summarization' %}">Text Summarization</a></li>
+                {% comment %} <li><a href="{% url 'language_learning' %}">Language Learning</a></li>
+                <li><a href="{% url 'text_generation' %}">Text Generation</a></li>
+                <li><a href="{% url 'text_to_speech' %}">Text to Speech</a></li>
+                <li><a href="{% url 'speech_to_text' %}">Speech to  Text</a></li>
+                <li><a href="{% url 'language_modeling' %}">Language Modeling</a></li> 
+                <li><a href="{% url 'content_creation' %}">Content Creation</a></li>  
+                <li><a href="{% url 'data_analysis' %}">Data Analysis</a></li>
+                <li><a href="{% url 'ai_chatbot' %}">AI Chatbot</a></li>   
+                
+                <li><a href="{% url 'contact_support' %}">Contact Support</a></li> {% endcomment %}
+                
+                <!-- Add more links as needed -->
+            </ul>
+        </div>
+
+        <!-- Screensaver-style content section -->
+        <div class="video-section">
+            <div class="screensaver-content">
+                <div class="screensaver-title">AI Magic</div>
+                <div class="screensaver-subtitle">Your Intelligent Language Companion</div>
+                
+                <div class="floating-icons">
+                    <div class="floating-icon">🤖</div>
+                    <div class="floating-icon">✨</div>
+                    <div class="floating-icon">🚀</div>
+                </div>
+                
+                <p style="margin-top: 30px; color: #666;">
+                    Experience the future of language processing with our cutting-edge AI tools
+                </p>
+            </div>
+        </div>
+    </div>
     
+    <footer>
+        <p>&copy; 2025 Magic Companion</p>
+    </footer>
+
+    <script>
+        // Ensure video plays automatically
+        document.addEventListener('DOMContentLoaded', function() {
+            const video = document.querySelector('.video-background video');
+            if (video) {
+                video.play().catch(function(error) {
+                    console.log('Video autoplay failed:', error);
+                });
+            }
+        });
+    </script>
 </body>
-<footer>
-        <p>&copy; 2025 Language Companion</p>
-</footer>
 </html>

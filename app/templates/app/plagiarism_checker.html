@@ -2,32 +2,179 @@
 <html>
 <head>
     <title>Plagiarism Checker</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            margin: 0;
+            padding: 40px 20px;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            box-sizing: border-box;
+        }
+
+        .container {
+            max-width: 800px;
+            margin: 0 auto;
+        }
+
+        h1 {
+            color: white;
+            text-align: center;
+            margin-bottom: 30px;
+            font-size: 2.5em;
+            text-shadow: 0 2px 4px rgba(0,0,0,0.3);
+        }
+
+        form {
+            background: white;
+            padding: 30px;
+            border-radius: 10px;
+            box-shadow: 0 4px 15px rgba(0, 0, 0, 0.1);
+            margin-bottom: 20px;
+            border: 1px solid #e9ecef;
+        }
+
+        textarea {
+            width: 100%;
+            padding: 15px;
+            border: 2px solid #e9ecef;
+            border-radius: 8px;
+            resize: vertical;
+            font-size: 16px;
+            font-family: inherit;
+            transition: border-color 0.3s ease;
+            box-sizing: border-box;
+            margin-bottom: 15px;
+        }
+
+        textarea:focus {
+            outline: none;
+            border-color: #007bff;
+            box-shadow: 0 0 0 3px rgba(0, 123, 255, 0.1);
+        }
+
+        button {
+            background: #007bff;
+            color: white;
+            border: none;
+            padding: 15px 30px;
+            border-radius: 8px;
+            cursor: pointer;
+            font-size: 16px;
+            font-weight: 500;
+            transition: all 0.3s ease;
+            box-shadow: 0 2px 8px rgba(0, 123, 255, 0.3);
+        }
+
+        button:hover {
+            background: #0056b3;
+            transform: translateY(-2px);
+            box-shadow: 0 4px 12px rgba(0, 123, 255, 0.4);
+        }
+
+        button:active {
+            transform: translateY(0);
+        }
+
+        h3 {
+            margin-top: 20px;
+            color: #333;
+        }
+
+        .back-link {
+            margin-top: 20px;
+            display: inline-block;
+            color: #007bff;
+            text-decoration: none;
+            padding: 10px 15px;
+            border: 1px solid #007bff;
+            border-radius: 4px;
+            transition: all 0.3s ease;
+        }
+
+        .back-link:hover {
+            background: #007bff;
+            color: white;
+        }
+
+        .plagiarism-report {
+            background: #f8f9fa;
+            padding: 15px;
+            border-radius: 5px;
+            border-left: 4px solid #007bff;
+            margin-top: 20px;
+        }
+
+        .similarity-results {
+            background: #fff3cd;
+            padding: 15px;
+            border-radius: 5px;
+            border-left: 4px solid #ffc107;
+            margin-top: 20px;
+        }
+
+        .similarity-results ul {
+            list-style: none;
+            padding: 0;
+            margin: 0;
+        }
+
+        .similarity-results li {
+            background: white;
+            padding: 15px;
+            margin: 10px 0;
+            border-radius: 5px;
+            border: 1px solid #e9ecef;
+            box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+        }
+
+        .error-message {
+            background: #f8d7da;
+            color: #721c24;
+            padding: 15px;
+            border-radius: 5px;
+            border-left: 4px solid #dc3545;
+            margin-top: 20px;
+        }
+    </style>
 </head>
 <body>
-        <h2>Plagiarism Checker</h2>
-    <form method="POST">
-        {% csrf_token %}
-        <textarea name="text" rows="5" cols="50">{{ original }}</textarea>
-        <button type="submit">Check Plagiarism</button>
-    </form>
-    {% if plagiarism_report %}
-        <h3>Plagiarism Report:</h3>
-        <p>{{ plagiarism_report }}</p>
-    {% endif %}
-    {% if similarity_results %}
-        <h3>Similar Content Found:</h3>
-        <ul>
-        {% for result in similarity_results %}
-            <li>Source: {{ result.source }}<br>
-                Similarity: {{ result.similarity }}<br>
-                Text: {{ result.text|truncatewords:30 }}</li>
-        {% endfor %}
-        </ul>
-    {% endif %}
-    {% if error %}
-        <p style="color: red;">{{ error }}</p>
-    {% endif %}
+    <div class="container">
+        <h1>Plagiarism Checker</h1>
+        
+        <form method="POST">
+            {% csrf_token %}
+            <textarea name="text" rows="5" cols="50" placeholder="Enter text to check for plagiarism...">{{ original }}</textarea>
+            <button type="submit">Check Plagiarism</button>
+        </form>
+        
+        {% if plagiarism_report %}
+            <div class="plagiarism-report">
+                <h3>Plagiarism Report:</h3>
+                <p>{{ plagiarism_report }}</p>
+            </div>
+        {% endif %}
+        
+        {% if similarity_results %}
+            <div class="similarity-results">
+                <h3>Similar Content Found:</h3>
+                <ul>
+                {% for result in similarity_results %}
+                    <li>Source: {{ result.source }}<br>
+                        Similarity: {{ result.similarity }}<br>
+                        Text: {{ result.text|truncatewords:30 }}</li>
+                {% endfor %}
+                </ul>
+            </div>
+        {% endif %}
+        
+        {% if error %}
+            <div class="error-message">
+                <p>{{ error }}</p>
+            </div>
+        {% endif %}
 
-    <a href="{% url 'home' %}">Back to Home</a>
+        <a href="{% url 'home' %}" class="back-link">← Back to Home</a>
+    </div>
 </body>
 </html>

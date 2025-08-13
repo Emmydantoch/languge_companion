@@ -2,18 +2,137 @@
 <html>
 <head>
     <title>Grammar Check</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            margin: 0;
+            padding: 40px 20px;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            box-sizing: border-box;
+        }
+
+        .container {
+            max-width: 800px;
+            margin: 0 auto;
+        }
+
+        h1 {
+            color: white;
+            text-align: center;
+            margin-bottom: 30px;
+            font-size: 2.5em;
+            text-shadow: 0 2px 4px rgba(0,0,0,0.3);
+        }
+
+        form {
+            background: white;
+            padding: 30px;
+            border-radius: 10px;
+            box-shadow: 0 4px 15px rgba(0, 0, 0, 0.1);
+            margin-bottom: 20px;
+            border: 1px solid #e9ecef;
+        }
+
+        textarea {
+            width: 100%;
+            padding: 15px;
+            border: 2px solid #e9ecef;
+            border-radius: 8px;
+            resize: vertical;
+            font-size: 16px;
+            font-family: inherit;
+            transition: border-color 0.3s ease;
+            box-sizing: border-box;
+            margin-bottom: 15px;
+        }
+
+        textarea:focus {
+            outline: none;
+            border-color: #007bff;
+            box-shadow: 0 0 0 3px rgba(0, 123, 255, 0.1);
+        }
+
+        button {
+            background: #007bff;
+            color: white;
+            border: none;
+            padding: 15px 30px;
+            border-radius: 8px;
+            cursor: pointer;
+            font-size: 16px;
+            font-weight: 500;
+            transition: all 0.3s ease;
+            box-shadow: 0 2px 8px rgba(0, 123, 255, 0.3);
+        }
+
+        button:hover {
+            background: #0056b3;
+            transform: translateY(-2px);
+            box-shadow: 0 4px 12px rgba(0, 123, 255, 0.4);
+        }
+
+        button:active {
+            transform: translateY(0);
+        }
+
+        h3 {
+            margin-top: 20px;
+            color: #333;
+        }
+
+        .back-link {
+            margin-top: 20px;
+            display: inline-block;
+            color: #007bff;
+            text-decoration: none;
+            padding: 10px 15px;
+            border: 1px solid #007bff;
+            border-radius: 4px;
+            transition: all 0.3s ease;
+        }
+
+        .back-link:hover {
+            background: #007bff;
+            color: white;
+        }
+
+        .grammar-result {
+            background: #f8f9fa;
+            padding: 15px;
+            border-radius: 5px;
+            border-left: 4px solid #007bff;
+            margin-top: 20px;
+        }
+
+        .error-message {
+            background: #f8d7da;
+            color: #721c24;
+            padding: 15px;
+            border-radius: 5px;
+            border-left: 4px solid #dc3545;
+            margin-top: 20px;
+        }
+    </style>
 </head>
 <body>
-    <h1>Grammar Check</h1>
-    <form method="post">
-      {% csrf_token %}
-      <textarea name="text" rows="5" cols="60" placeholder="Type something..."></textarea><br>
-      <button type="submit">Check Grammar</button>
-    </form>
+    <div class="container">
+        <h1>Grammar Check</h1>
+        
+        <form method="post">
+            {% csrf_token %}
+            <textarea name="text" rows="5" cols="60" placeholder="Type something to check grammar..."></textarea>
+            <button type="submit">Check Grammar</button>
+        </form>
 
-    {% if corrected %}
-      <h3>Corrected Text:</h3>
-      <p>{{ corrected }}</p>
-    {% endif %}
+        {% if corrected %}
+            <div class="grammar-result">
+                <h3>Corrected Text:</h3>
+                <p>{{ corrected }}</p>
+            </div>
+        {% endif %}
+        
+        <a href="{% url 'home' %}" class="back-link">← Back to Home</a>
+    </div>
 </body>
 </html>
