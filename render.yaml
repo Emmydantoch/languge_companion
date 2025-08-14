@@ -1,14 +1,12 @@
 services:
   - type: web
     name: languge-companion
-    env: python
-    buildCommand: "./build.sh"
-    startCommand: "gunicorn languge_companion.wsgi:application"
+    env: docker
     plan: free
     envVars:
-      - key: PYTHON_VERSION
-        value: "3.11.0"
       - key: DEBUG
         value: "False"
       - key: DJANGO_SETTINGS_MODULE
         value: "languge_companion.settings"
+      - key: RENDER
+        value: "True"

@@ -45,6 +45,9 @@ RUN mkdir -p staticfiles
 # Collect static files (skip if no static files exist)
 RUN python manage.py collectstatic --noinput || echo "No static files to collect"
 
+# Run database migrations
+RUN python manage.py migrate --noinput || echo "No migrations to run"
+
 # Expose port
 EXPOSE 8000
 
