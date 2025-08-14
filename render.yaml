@@ -3,6 +3,7 @@ services:
     name: languge-companion
     env: docker
     plan: free
+    dockerfilePath: ./Dockerfile
     envVars:
       - key: DEBUG
         value: "False"
