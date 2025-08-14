@@ -143,14 +143,16 @@
         
         <form method="POST">
             {% csrf_token %}
-            <textarea name="text" rows="5" cols="50" placeholder="Enter text to check spelling...">{{ original }}</textarea>
+            <textarea name="text" rows="5" cols="50" placeholder="Enter text to check spelling...">{% if not corrected %}{{ original }}{% endif %}</textarea>
             <button type="submit">Check Spelling</button>
         </form>
         
         {% if corrected %}
             <div class="spell-result">
+                <h3>Original Text:</h3>
+                <p style="background: #fff3cd; padding: 10px; border-radius: 5px;">{{ original }}</p>
                 <h3>Corrected Text:</h3>
-                <p>{{ corrected }}</p>
+                <p style="background: #d4edda; padding: 10px; border-radius: 5px;">{{ corrected }}</p>
             </div>
         {% endif %}
         

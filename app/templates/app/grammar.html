@@ -121,14 +121,41 @@
         
         <form method="post">
             {% csrf_token %}
-            <textarea name="text" rows="5" cols="60" placeholder="Type something to check grammar..."></textarea>
+            <textarea name="text" rows="5" cols="60" placeholder="Type something to check grammar...">{% if not corrected %}{{ request.POST.text }}{% endif %}</textarea>
             <button type="submit">Check Grammar</button>
         </form>
 
+        {% if error_message %}
+            <div class="error-message">
+                <p>{{ error_message }}</p>
+            </div>
+        {% endif %}
+
         {% if corrected %}
             <div class="grammar-result">
+                <h3>Original Text:</h3>
+                <p style="background: #fff3cd; padding: 10px; border-radius: 5px;">{{ original }}</p>
+                
                 <h3>Corrected Text:</h3>
-                <p>{{ corrected }}</p>
+                <p style="background: #d4edda; padding: 10px; border-radius: 5px;">{{ corrected }}</p>
+                
+                {% if errors %}
+                    <h3>Grammar Issues Found ({{ errors|length }}):</h3>
+                    <div style="background: #f8f9fa; padding: 15px; border-radius: 5px; margin-top: 10px;">
+                        {% for error in errors %}
+                            <div style="background: white; padding: 10px; margin: 8px 0; border-radius: 5px; border-left: 4px solid #ffc107;">
+                                <strong>Issue:</strong> {{ error.message }}<br>
+                                {% if error.suggestions %}
+                                    <strong>Suggestions:</strong> {{ error.suggestions|join:", " }}<br>
+                                {% endif %}
+                                <strong>Category:</strong> {{ error.category }}<br>
+                                <small style="color: #666;">Rule: {{ error.rule }}</small>
+                            </div>
+                        {% endfor %}
+                    </div>
+                {% else %}
+                    <p style="color: #28a745; font-weight: bold;">✓ No grammar issues detected!</p>
+                {% endif %}
             </div>
         {% endif %}
         

@@ -136,6 +136,13 @@
             border-left: 4px solid #dc3545;
             margin-top: 20px;
         }
+
+        .similarity-score {
+            font-weight: bold;
+            padding: 2px 6px;
+            border-radius: 3px;
+            background: #e9ecef;
+        }
     </style>
 </head>
 <body>
@@ -144,27 +151,37 @@
         
         <form method="POST">
             {% csrf_token %}
-            <textarea name="text" rows="5" cols="50" placeholder="Enter text to check for plagiarism...">{{ original }}</textarea>
+            <textarea name="text" rows="5" cols="50" placeholder="Enter text to check for plagiarism...">{% if not plagiarism_report %}{{ original }}{% endif %}</textarea>
             <button type="submit">Check Plagiarism</button>
         </form>
         
         {% if plagiarism_report %}
             <div class="plagiarism-report">
+                <h3>Original Text:</h3>
+                <p style="background: #fff3cd; padding: 10px; border-radius: 5px;">{{ original }}</p>
                 <h3>Plagiarism Report:</h3>
-                <p>{{ plagiarism_report }}</p>
+                <p style="background: #f8f9fa; padding: 10px; border-radius: 5px;">{{ plagiarism_report }}</p>
             </div>
         {% endif %}
         
         {% if similarity_results %}
             <div class="similarity-results">
-                <h3>Similar Content Found:</h3>
+                <h3>Potential Sources Found ({{ similarity_results|length }}):</h3>
                 <ul>
                 {% for result in similarity_results %}
-                    <li>Source: {{ result.source }}<br>
-                        Similarity: {{ result.similarity }}<br>
-                        Text: {{ result.text|truncatewords:30 }}</li>
+                    <li>
+                        <strong>Source:</strong> {{ result.source }}<br>
+                        <strong>Similarity:</strong> <span class="similarity-score">{{ result.similarity }}</span><br>
+                        <strong>Type:</strong> {{ result.engine }}<br>
+                        <strong>Content:</strong> <em>{{ result.text|truncatewords:25 }}</em>
+                    </li>
                 {% endfor %}
                 </ul>
+                <p style="margin-top: 15px; font-size: 0.9em; color: #666;">
+                    <strong>Note:</strong> High similarity (>50%) may indicate direct copying. 
+                    Moderate similarity (30-50%) suggests paraphrasing or common content. 
+                    Low similarity (<30%) may indicate coincidental matches or common phrases.
+                </p>
             </div>
         {% endif %}
         
