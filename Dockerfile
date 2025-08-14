@@ -52,4 +52,4 @@ RUN python manage.py migrate --noinput || echo "No migrations to run"
 EXPOSE 8000
 
 # Start command with non-root user
-CMD ["gunicorn", "--bind", "0.0.0.0:8000", "--user", "appuser", "--group", "appuser", "languge_companion.wsgi:application"]
+CMD ["gunicorn", "--bind", "0.0.0.0:8000", "--user", "appuser", "--group", "appuser", "languge_companion.wsgi:application"] 
