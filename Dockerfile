@@ -1,10 +1,15 @@
-FROM python:3.11-slim
+# Use more secure and updated base image
+FROM python:3.11-slim-bookworm
 
-# Install system dependencies including Java
+# Create non-root user for security
+RUN groupadd -r appuser && useradd -r -g appuser appuser
+
+# Install system dependencies including Java with security updates
 RUN apt-get update && \
-    apt-get install -y \
+    apt-get install -y --no-install-recommends \
     default-jre \
     default-jdk \
+    && apt-get upgrade -y \
     && rm -rf /var/lib/apt/lists/* \
     && apt-get clean
 
@@ -24,9 +29,15 @@ RUN pip install --upgrade pip && \
 # Copy project files
 COPY . .
 
+# Change ownership to non-root user
+RUN chown -R appuser:appuser /app
+
 # Set environment variables
 ENV PYTHONPATH=/app
 ENV DJANGO_SETTINGS_MODULE=languge_companion.settings
+
+# Switch to non-root user
+USER appuser
 
 # Create staticfiles directory
 RUN mkdir -p staticfiles
@@ -37,5 +48,5 @@ RUN python manage.py collectstatic --noinput || echo "No static files to collect
 # Expose port
 EXPOSE 8000
 
-# Start command
-CMD ["gunicorn", "--bind", "0.0.0.0:8000", "languge_companion.wsgi:application"]
+# Start command with non-root user
+CMD ["gunicorn", "--bind", "0.0.0.0:8000", "--user", "appuser", "--group", "appuser", "languge_companion.wsgi:application"]
