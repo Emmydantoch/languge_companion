@@ -48,8 +48,8 @@ RUN python manage.py collectstatic --noinput || echo "No static files to collect
 # Run database migrations
 RUN python manage.py migrate --noinput || echo "No migrations to run"
 
-# Expose port
+# Expose port (Render will set PORT env var)
 EXPOSE 8000
 
-# Start command with non-root user
-CMD ["gunicorn", "--bind", "0.0.0.0:8000", "--user", "appuser", "--group", "appuser", "languge_companion.wsgi:application"]
+# Start command with non-root user (use PORT env var for Render compatibility)
+CMD ["sh", "-c", "gunicorn --bind 0.0.0.0:${PORT:-8000} languge_companion.wsgi:application"]
