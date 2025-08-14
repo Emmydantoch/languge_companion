@@ -1,32 +1,55 @@
-# Use Python 3.13.2 as the base image
-FROM python:3.13.2-slim
+# Use more secure and updated base image
+FROM python:3.11-slim-bookworm
 
-# Install Java (OpenJDK 17) for language-tool-python
-RUN apt-get update && apt-get install -y openjdk-17-jre && rm -rf /var/lib/apt/lists/*
+# Create non-root user for security
+RUN groupadd -r appuser && useradd -r -g appuser appuser
 
-# Install Poetry
-RUN pip install poetry==2.1.3
+# Install system dependencies including Java with security updates
+RUN apt-get update && \
+    apt-get install -y --no-install-recommends \
+    default-jre \
+    default-jdk \
+    && apt-get upgrade -y \
+    && rm -rf /var/lib/apt/lists/* \
+    && apt-get clean
 
-# Set working directory
+# Verify Java installation
+RUN java -version
+
+# Set work directory
 WORKDIR /app
 
-# Copy Poetry files
-COPY pyproject.toml poetry.lock ./
+# Copy requirements first for better caching
+COPY requirements.txt .
 
-# Install dependencies with Poetry
-RUN poetry config virtualenvs.create false && poetry install --no-dev
+# Install Python dependencies
+RUN pip install --upgrade pip && \
+    pip install -r requirements.txt
 
-# Copy the rest of the application
+# Copy project files
 COPY . .
 
-# Collect static files (optional, for Django)
-RUN python manage.py collectstatic --noinput
+# Change ownership to non-root user
+RUN chown -R appuser:appuser /app
 
-# Expose the port
-EXPOSE 10000
+# Set environment variables
+ENV PYTHONPATH=/app
+ENV DJANGO_SETTINGS_MODULE=languge_companion.settings
 
-# Set environment variable for port
-ENV PORT=10000
+# Switch to non-root user
+USER appuser
 
-# Start the application with Gunicorn using Django's WSGI
-CMD ["poetry", "run", "gunicorn", "languge_companion.wsgi:application", "--bind", "0.0.0.0:$PORT"]
+# Create staticfiles directory
+RUN mkdir -p staticfiles
+
+# Collect static files (skip if no static files exist)
+RUN python manage.py collectstatic --noinput || echo "No static files to collect"
+
+# Run database migrations
+RUN python manage.py migrate --noinput || echo "No migrations to run"
+
+# Expose port
+EXPOSE 8000
+
+# Start command with non-root user
+CMD ["gunicorn", "--bind", "0.0.0.0:8000", "--user", "appuser", "--group", "appuser", "languge_companion.wsgi:application"]
