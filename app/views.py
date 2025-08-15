@@ -200,6 +200,93 @@ def simple_grammar_check(text):
         logging.error(f"Simple grammar check error: {str(e)}")
         return text, []
 
+def simple_spell_check(text):
+    """Simple spelling checking fallback that doesn't require Java/LanguageTool"""
+    try:
+        import re
+        corrected = text
+        errors = []
+        
+        # Common spelling corrections
+        spelling_corrections = [
+            # Common misspellings
+            (r'\bteh\b', 'the'),
+            (r'\btha\b', 'the'),
+            (r'\bthier\b', 'their'),
+            (r'\bthier\b', 'there'),
+            (r'\byour\b(?=\s+(are|is|were))', 'you\'re'),  # your are -> you're
+            (r'\bits\b(?=\s+(a|an|the))', 'it\'s'),  # its a -> it's a
+            (r'\bto\b(?=\s+(much|many|good|bad))', 'too'),  # to much -> too much
+            (r'\bwould\s+of\b', 'would have'),
+            (r'\bcould\s+of\b', 'could have'),
+            (r'\bshould\s+of\b', 'should have'),
+            (r'\balot\b', 'a lot'),
+            (r'\ballot\b', 'a lot'),
+            (r'\brecieve\b', 'receive'),
+            (r'\bacheive\b', 'achieve'),
+            (r'\bbelieve\b', 'believe'),
+            (r'\bwierd\b', 'weird'),
+            (r'\bfrend\b', 'friend'),
+            (r'\bfriendly\b', 'friendly'),
+            (r'\bdefinately\b', 'definitely'),
+            (r'\bseperate\b', 'separate'),
+            (r'\boccured\b', 'occurred'),
+            (r'\boccuring\b', 'occurring'),
+            (r'\bembarrass\b', 'embarrass'),
+            (r'\bneccessary\b', 'necessary'),
+            (r'\baccommodate\b', 'accommodate'),
+            (r'\bbeginning\b', 'beginning'),
+            (r'\bcommittee\b', 'committee'),
+            (r'\bdevelop\b', 'develop'),
+            (r'\benvironment\b', 'environment'),
+            (r'\bgovernment\b', 'government'),
+            (r'\bindependent\b', 'independent'),
+            (r'\bmaintenance\b', 'maintenance'),
+            (r'\bparallel\b', 'parallel'),
+            (r'\bprivilege\b', 'privilege'),
+            (r'\bprofessional\b', 'professional'),
+            (r'\brecommend\b', 'recommend'),
+            (r'\bresponsible\b', 'responsible'),
+            (r'\btomorrow\b', 'tomorrow'),
+            (r'\bunfortunately\b', 'unfortunately'),
+        ]
+        
+        original_text = corrected
+        changes_made = []
+        
+        # Apply spelling corrections
+        for pattern, replacement in spelling_corrections:
+            old_corrected = corrected
+            corrected = re.sub(pattern, replacement, corrected, flags=re.IGNORECASE)
+            
+            # Track changes for error reporting
+            if old_corrected != corrected:
+                changes_made.append({
+                    'original': pattern,
+                    'corrected': replacement,
+                    'message': f"Spelling correction: {pattern.replace(r'\\b', '').replace(r'\b', '')} → {replacement}"
+                })
+        
+        # Create error reports for changes made
+        if changes_made:
+            for change in changes_made:
+                errors.append({
+                    'word': change['original'],
+                    'suggestions': [change['corrected']],
+                    'message': change['message'],
+                    'rule': "SIMPLE_SPELLING",
+                    'category': "Spelling"
+                })
+        
+        # Remove duplicate spaces and trim
+        corrected = re.sub(r'\s+', ' ', corrected).strip()
+        
+        return corrected, errors
+        
+    except Exception as e:
+        logging.error(f"Simple spell check error: {str(e)}")
+        return text, []
+
 def grammar_check(request):
     corrected = ""
     original_text = ""
@@ -368,8 +455,15 @@ def spell_check(request):
                         
                     except Exception as lt_error:
                         logging.error(f"LanguageTool spelling error: {str(lt_error)}")
-                        error_message = "Spell checking not available. Showing original text."
-                        corrected = text
+                        logging.info("Falling back to simple spell check")
+                        # Fallback to simple spell checking
+                        try:
+                            corrected, errors = simple_spell_check(text)
+                            logging.info("Spell check completed using simple spell check")
+                        except Exception as simple_error:
+                            logging.error(f"Simple spell check error: {str(simple_error)}")
+                            error_message = "Spell checking not available. Showing original text."
+                            corrected = text
                 else:
                     # Use Hugging Face Inference API for spelling
                     logging.info("Running spell check via Hugging Face API...")
@@ -411,8 +505,15 @@ def spell_check(request):
                             
                         except Exception as lt_error:
                             logging.error(f"LanguageTool spelling fallback error: {str(lt_error)}")
-                            error_message = "Spell checking not available. Showing original text."
-                            corrected = text
+                            logging.info("Falling back to simple spell check")
+                            # Final fallback to simple spell checking
+                            try:
+                                corrected, errors = simple_spell_check(text)
+                                logging.info("Spell check completed using simple spell check fallback")
+                            except Exception as simple_error:
+                                logging.error(f"Simple spell check fallback error: {str(simple_error)}")
+                                error_message = "Spell checking not available. Showing original text."
+                                corrected = text
                     else:
                         logging.info("Spell check completed via Hugging Face API")
                         
