@@ -11,3 +11,5 @@ services:
         value: "languge_companion.settings"
       - key: RENDER
         value: "True"
+      - key: HUGGINGFACE_API_KEY
+        sync: false

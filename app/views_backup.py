@@ -82,58 +82,6 @@ def correct_spelling_with_hf_api(text, api_key):
         logging.error(f"Error calling Hugging Face Spelling API: {str(e)}")
         return None
 
-def summarize_with_hf_api(text, api_key):
-    """Use Hugging Face Inference API for text summarization"""
-    try:
-        API_URL = "https://api-inference.huggingface.co/models/facebook/bart-large-cnn"
-        headers = {"Authorization": f"Bearer {api_key}"}
-        
-        payload = {
-            "inputs": text,
-            "parameters": {
-                "max_length": 150,
-                "min_length": 30,
-                "do_sample": False
-            }
-        }
-        
-        response = requests.post(API_URL, headers=headers, json=payload)
-        
-        if response.status_code == 200:
-            result = response.json()
-            if isinstance(result, list) and len(result) > 0:
-                return result[0].get("summary_text", text)
-            return text
-        else:
-            logging.error(f"Hugging Face Summarization API error: {response.status_code} - {response.text}")
-            return None
-            
-    except Exception as e:
-        logging.error(f"Error calling Hugging Face Summarization API: {str(e)}")
-        return None
-
-def simple_extractive_summary(text, max_sentences=3):
-    """Simple extractive summarization fallback"""
-    try:
-        # Split into sentences
-        sentences = [s.strip() for s in text.split('.') if s.strip()]
-        
-        if len(sentences) <= max_sentences:
-            return text
-        
-        # Take first sentence, middle sentence, and last sentence
-        if len(sentences) >= 3:
-            first = sentences[0]
-            middle = sentences[len(sentences) // 2]
-            last = sentences[-1]
-            return f"{first}. {middle}. {last}."
-        else:
-            return '. '.join(sentences[:max_sentences]) + '.'
-            
-    except Exception as e:
-        logging.error(f"Simple summary error: {str(e)}")
-        return text[:200] + "..." if len(text) > 200 else text
-
 def grammar_check(request):
     corrected = ""
     original_text = ""
@@ -575,57 +523,61 @@ from transformers import pipeline
 logging.basicConfig(level=logging.DEBUG)
 summarizer = None
 
+def init_summarizer():
+    global summarizer
+    if summarizer is None:
+        try:
+            api_key = os.getenv("HUGGINGFACE_API_KEY")
+            if not api_key:
+                logging.error("Hugging Face API key environment variable not set")
+                return None
+            logging.info("Loading summarizer model via Hugging Face Inference API")
+            summarizer = pipeline(
+                "summarization",
+                model="facebook/bart-large-cnn",
+                use_auth_token=api_key,
+                device=-1  # Use CPU, as Inference API handles computation
+            )
+            logging.info("Summarizer model loaded successfully")
+        except Exception as e:
+            logging.error(f"Error loading summarizer model: {str(e)}")
+            summarizer = None
+    return summarizer
+
 def text_summarization(request):
     summary_text = ""
     error = ""
     input_text = ""
-    
+    logging.info("Processing text_summarization request")
     if request.method == "POST":
-        input_text = request.POST.get("text", "").strip()
-        logging.info(f"Received text summarization input: {input_text[:50]}...")
-        
+        input_text = request.POST.get("text", "")
+        logging.info(f"Received input text: {input_text[:50]}...")
         if not input_text:
             error = "Please provide text to summarize."
-            logging.warning("No input text provided for summarization")
+            logging.warning("No input text provided")
         else:
             try:
-                # Get Hugging Face API key
-                api_key = os.getenv("HUGGINGFACE_API_KEY")
-                if not api_key:
-                    logging.warning("HUGGINGFACE_API_KEY environment variable not set")
-                    # Fallback to simple extractive summarization
-                    try:
-                        summary_text = simple_extractive_summary(input_text)
-                        logging.info("Text summarization completed using simple extractive method")
-                        
-                    except Exception as simple_error:
-                        logging.error(f"Simple summarization error: {str(simple_error)}")
-                        error = "Text summarization not available. Showing truncated text."
-                        summary_text = input_text[:200] + "..." if len(input_text) > 200 else input_text
-                else:
-                    # Use Hugging Face Inference API for summarization
-                    logging.info("Running text summarization via Hugging Face API...")
-                    summary_text = summarize_with_hf_api(input_text, api_key)
-                    
-                    if summary_text is None:
-                        # Fallback to simple extractive summarization if API fails
-                        try:
-                            summary_text = simple_extractive_summary(input_text)
-                            logging.info("Text summarization completed using simple extractive fallback")
-                            
-                        except Exception as simple_error:
-                            logging.error(f"Simple summarization fallback error: {str(simple_error)}")
-                            error = "Text summarization not available. Showing truncated text."
-                            summary_text = input_text[:200] + "..." if len(input_text) > 200 else input_text
+                model = init_summarizer()
+                if model is None:
+                    logging.warning("Summarizer model is None")
+                    if len(input_text) > 150:
+                        summary_text = input_text[:150] + "..."
+                        error = "ML summarization not available. Showing truncated text instead."
                     else:
-                        logging.info("Text summarization completed via Hugging Face API")
-                        
+                        summary_text = input_text
+                        error = "ML summarization not available. Showing original text."
+                else:
+                    logging.info("Running summarization...")
+                    result = model(input_text, max_length=150, min_length=30, do_sample=False)
+                    summary_text = result[0]["summary_text"]
+                    logging.info("Summarization completed")
             except Exception as e:
-                logging.error(f"Text summarization error: {str(e)}")
+                logging.error(f"Summarization error: {str(e)}")
                 error = f"Error summarizing text: {str(e)}"
-                # Final fallback
-                summary_text = input_text[:200] + "..." if len(input_text) > 200 else input_text
-                
+                if len(input_text) > 150:
+                    summary_text = input_text[:150] + "..."
+                else:
+                    summary_text = input_text
     return render(request, "app/text_summarization.html", {
         "summary_text": summary_text,
         "error": error,
