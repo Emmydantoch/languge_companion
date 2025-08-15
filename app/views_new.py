@@ -101,34 +101,83 @@ def correct_grammar_with_hf_api(text, api_key):
     return None
 
 def correct_spelling_with_hf_api(text, api_key):
-    """Use Hugging Face Inference API for spelling correction"""
-    try:
-        API_URL = "https://api-inference.huggingface.co/models/oliverguhr/spelling-correction-english-base"
-        headers = {"Authorization": f"Bearer {api_key}"}
-        
-        payload = {
-            "inputs": text,
-            "parameters": {
-                "max_length": 512,
-                "num_beams": 4,
-                "early_stopping": True
-            }
-        }
-        
-        response = requests.post(API_URL, headers=headers, json=payload)
-        
-        if response.status_code == 200:
-            result = response.json()
-            if isinstance(result, list) and len(result) > 0:
-                return result[0].get("generated_text", text)
-            return text
-        else:
-            logging.error(f"Hugging Face Spelling API error: {response.status_code} - {response.text}")
-            return None
+    """Use Hugging Face Inference API for spelling correction with multiple model fallbacks"""
+    # List of spelling correction models to try
+    models = [
+        "oliverguhr/spelling-correction-english-base",
+        "microsoft/DialoGPT-medium",  # Fallback that can handle spelling
+        "t5-base"  # General text-to-text model
+    ]
+    
+    for model in models:
+        try:
+            API_URL = f"https://api-inference.huggingface.co/models/{model}"
+            headers = {"Authorization": f"Bearer {api_key}"}
             
-    except Exception as e:
-        logging.error(f"Error calling Hugging Face Spelling API: {str(e)}")
-        return None
+            # Different input formats for different models
+            if "spelling-correction" in model:
+                payload = {
+                    "inputs": text,
+                    "parameters": {
+                        "max_length": 512,
+                        "num_beams": 4,
+                        "early_stopping": True,
+                        "temperature": 0.1
+                    }
+                }
+            elif "DialoGPT" in model:
+                payload = {
+                    "inputs": f"Fix spelling: {text}",
+                    "parameters": {
+                        "max_length": len(text) + 50,
+                        "temperature": 0.3,
+                        "do_sample": True,
+                        "pad_token_id": 50256
+                    }
+                }
+            else:  # t5-base
+                payload = {
+                    "inputs": f"spelling: {text}",
+                    "parameters": {
+                        "max_length": 512,
+                        "num_beams": 4,
+                        "early_stopping": True
+                    }
+                }
+            
+            response = requests.post(API_URL, headers=headers, json=payload, timeout=30)
+            
+            if response.status_code == 200:
+                result = response.json()
+                if isinstance(result, list) and len(result) > 0:
+                    corrected_text = result[0].get("generated_text", text)
+                    
+                    # Clean up response
+                    if corrected_text.startswith(("Fix spelling: ", "spelling: ")):
+                        corrected_text = corrected_text.split(": ", 1)[1] if ": " in corrected_text else corrected_text
+                    
+                    # Only return if there's a meaningful change or valid text
+                    if corrected_text.strip():
+                        logging.info(f"Spelling correction successful with model: {model}")
+                        return corrected_text.strip()
+                        
+                # Try next model if no result
+                continue
+                
+            elif response.status_code == 503:
+                logging.warning(f"Model {model} is loading, trying next model")
+                continue
+            else:
+                logging.error(f"Hugging Face Spelling API error for {model}: {response.status_code} - {response.text}")
+                continue
+                
+        except Exception as e:
+            logging.error(f"Error calling Hugging Face Spelling API for {model}: {str(e)}")
+            continue
+    
+    # All models failed
+    logging.error("All Hugging Face spelling models failed")
+    return None
 
 def grammar_check(request):
     corrected = ""
@@ -387,18 +436,53 @@ def translation(request):
     target_lang = "en"
     
     if request.method == "POST":
-        text = request.POST.get("text", "")
+        text = request.POST.get("text", "").strip()
         target_lang = request.POST.get("target_lang", "en")
         
         if not text:
             error = "Please provide text to translate."
         else:
             try:
+                # Primary translation using GoogleTranslator
+                logging.info(f"Translating text to {target_lang}: {text[:50]}...")
                 translator = GoogleTranslator(source='auto', target=target_lang)
                 translated = translator.translate(text)
+                
+                if not translated or translated == text:
+                    # Fallback: try with explicit source language detection
+                    try:
+                        from deep_translator import single_detection
+                        detected_lang = single_detection(text, api_key='free')
+                        if detected_lang != target_lang:
+                            translator = GoogleTranslator(source=detected_lang, target=target_lang)
+                            translated = translator.translate(text)
+                            logging.info(f"Translation successful with detected source: {detected_lang}")
+                        else:
+                            translated = text  # Same language, no translation needed
+                            logging.info("Source and target languages are the same")
+                    except Exception as fallback_error:
+                        logging.error(f"Language detection fallback failed: {str(fallback_error)}")
+                        translated = text
+                        error = "Translation completed but may not be optimal. Language detection failed."
+                else:
+                    logging.info("Translation completed successfully")
+                    
             except Exception as e:
+                logging.error(f"Translation error: {str(e)}")
                 error = f"Translation error: {str(e)}"
-                translated = text  # Fallback to original text
+                
+                # Final fallback: return original text with error message
+                translated = text
+                
+                # Try to provide a more helpful error message
+                if "target language" in str(e).lower():
+                    error = f"Unsupported target language '{target_lang}'. Please try a different language code."
+                elif "source language" in str(e).lower():
+                    error = "Could not detect source language. Please try with clearer text."
+                elif "connection" in str(e).lower() or "network" in str(e).lower():
+                    error = "Network error. Please check your internet connection and try again."
+                else:
+                    error = f"Translation service temporarily unavailable: {str(e)}"
     
     return render(request, "app/translation.html", {
         "translated": translated,
