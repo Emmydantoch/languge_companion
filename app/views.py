@@ -261,10 +261,12 @@ def simple_spell_check(text):
             
             # Track changes for error reporting
             if old_corrected != corrected:
+                # Clean pattern for display (remove word boundaries)
+                clean_pattern = pattern.replace(r'\\b', '').replace(r'\b', '')
                 changes_made.append({
                     'original': pattern,
                     'corrected': replacement,
-                    'message': f"Spelling correction: {pattern.replace(r'\\b', '').replace(r'\b', '')} → {replacement}"
+                    'message': f"Spelling correction: {clean_pattern} → {replacement}"
                 })
         
         # Create error reports for changes made
