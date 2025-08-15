@@ -16,34 +16,89 @@ def home(request):
     return render(request, "app/home.html")
 
 def correct_grammar_with_hf_api(text, api_key):
-    """Use Hugging Face Inference API for grammar correction"""
-    try:
-        API_URL = "https://api-inference.huggingface.co/models/vennify/t5-base-grammar-correction"
-        headers = {"Authorization": f"Bearer {api_key}"}
-        
-        payload = {
-            "inputs": f"grammar: {text}",
-            "parameters": {
-                "max_length": 512,
-                "num_beams": 4,
-                "early_stopping": True
-            }
-        }
-        
-        response = requests.post(API_URL, headers=headers, json=payload)
-        
-        if response.status_code == 200:
-            result = response.json()
-            if isinstance(result, list) and len(result) > 0:
-                return result[0].get("generated_text", text)
-            return text
-        else:
-            logging.error(f"Hugging Face API error: {response.status_code} - {response.text}")
-            return None
+    """Use Hugging Face Inference API for grammar correction with multiple model fallbacks"""
+    # List of grammar correction models to try in order of preference
+    models = [
+        "grammarly/coedit-large",  # More comprehensive grammar correction
+        "pszemraj/flan-t5-large-grammar-synthesis",  # Alternative grammar model
+        "vennify/t5-base-grammar-correction"  # Original fallback
+    ]
+    
+    for model in models:
+        try:
+            API_URL = f"https://api-inference.huggingface.co/models/{model}"
+            headers = {"Authorization": f"Bearer {api_key}"}
             
-    except Exception as e:
-        logging.error(f"Error calling Hugging Face API: {str(e)}")
-        return None
+            # Different input formats for different models
+            if "coedit" in model:
+                # CoEdit model expects specific format
+                payload = {
+                    "inputs": f"Fix grammar: {text}",
+                    "parameters": {
+                        "max_new_tokens": 256,
+                        "temperature": 0.1,
+                        "do_sample": False
+                    }
+                }
+            elif "flan-t5" in model:
+                # Flan-T5 model format
+                payload = {
+                    "inputs": f"Grammar: {text}",
+                    "parameters": {
+                        "max_length": 512,
+                        "num_beams": 4,
+                        "early_stopping": True,
+                        "temperature": 0.1
+                    }
+                }
+            else:
+                # Original format for t5-base model
+                payload = {
+                    "inputs": f"grammar: {text}",
+                    "parameters": {
+                        "max_length": 512,
+                        "num_beams": 4,
+                        "early_stopping": True
+                    }
+                }
+            
+            response = requests.post(API_URL, headers=headers, json=payload, timeout=30)
+            
+            if response.status_code == 200:
+                result = response.json()
+                if isinstance(result, list) and len(result) > 0:
+                    corrected_text = result[0].get("generated_text", text)
+                    # Clean up the response (remove input prefix if present)
+                    if corrected_text.startswith(("Fix grammar: ", "Grammar: ", "grammar: ")):
+                        corrected_text = corrected_text.split(": ", 1)[1] if ": " in corrected_text else corrected_text
+                    
+                    # Only return if there's a meaningful change
+                    if corrected_text.strip() and corrected_text.strip() != text.strip():
+                        logging.info(f"Grammar correction successful with model: {model}")
+                        return corrected_text.strip()
+                    elif corrected_text.strip():
+                        # Text is already correct
+                        return corrected_text.strip()
+                        
+                # Try next model if no meaningful result
+                logging.warning(f"Model {model} returned empty or unchanged result")
+                continue
+                
+            elif response.status_code == 503:
+                # Model is loading, try next model
+                logging.warning(f"Model {model} is loading (503), trying next model")
+                continue
+            else:
+                logging.error(f"Hugging Face API error for {model}: {response.status_code} - {response.text}")
+                continue
+                
+        except Exception as e:
+            logging.error(f"Error calling Hugging Face API for {model}: {str(e)}")
+            continue
+    
+    # All models failed
+    logging.error("All Hugging Face grammar models failed")
+    return None
 
 def correct_spelling_with_hf_api(text, api_key):
     """Use Hugging Face Inference API for spelling correction"""
@@ -94,29 +149,36 @@ def grammar_check(request):
                 api_key = os.getenv("HUGGINGFACE_API_KEY")
                 if not api_key:
                     logging.warning("HUGGINGFACE_API_KEY environment variable not set")
-                    # Fallback to using language_tool_python
+                    # Fallback to using language_tool_python with enhanced rules
                     try:
+                        # Use LanguageTool with more comprehensive rule checking
                         tool = language_tool_python.LanguageTool('en-US')
+                        
+                        # Enable additional rule categories for better grammar checking
+                        tool.disabled_rules = []  # Enable all rules
+                        
                         matches = tool.check(original_text)
                         corrected = tool.correct(original_text)
                         
-                        # Convert matches to errors format
+                        # Convert matches to errors format with more detail
                         errors = []
                         for match in matches:
                             errors.append({
                                 'message': match.message,
                                 'context': match.context,
-                                'suggestions': match.replacements[:3],  # Limit to 3 suggestions
+                                'suggestions': match.replacements[:5],  # Show more suggestions
                                 'rule': match.ruleId,
-                                'category': match.category
+                                'category': match.category,
+                                'offset': match.offset,
+                                'length': match.errorLength
                             })
                         
-                        logging.info("Grammar correction completed using LanguageTool")
+                        logging.info(f"Grammar correction completed using LanguageTool. Found {len(matches)} issues.")
                         tool.close()
                         
                     except Exception as lt_error:
                         logging.error(f"LanguageTool error: {str(lt_error)}")
-                        error_message = "Grammar correction not available. Showing original text."
+                        error_message = "Grammar correction not available. Please check if Java is installed for LanguageTool."
                         corrected = original_text
                 else:
                     # Use Hugging Face Inference API
@@ -125,43 +187,60 @@ def grammar_check(request):
                     
                     if corrected is None:
                         # Fallback to LanguageTool if API fails
+                        logging.info("Hugging Face API failed, falling back to LanguageTool")
                         try:
                             tool = language_tool_python.LanguageTool('en-US')
+                            
+                            # Enable comprehensive grammar checking
+                            tool.disabled_rules = []  # Enable all rules for thorough checking
+                            
                             matches = tool.check(original_text)
                             corrected = tool.correct(original_text)
                             
-                            # Convert matches to errors format
+                            # Convert matches to errors format with enhanced details
                             errors = []
                             for match in matches:
                                 errors.append({
                                     'message': match.message,
                                     'context': match.context,
-                                    'suggestions': match.replacements[:3],
+                                    'suggestions': match.replacements[:5],  # More suggestions
                                     'rule': match.ruleId,
-                                    'category': match.category
+                                    'category': match.category,
+                                    'offset': match.offset,
+                                    'length': match.errorLength,
+                                    'type': 'LanguageTool'
                                 })
                             
-                            logging.info("Grammar correction completed using LanguageTool fallback")
+                            logging.info(f"Grammar correction completed using LanguageTool fallback. Found {len(matches)} issues.")
                             tool.close()
                             
                         except Exception as lt_error:
                             logging.error(f"LanguageTool fallback error: {str(lt_error)}")
-                            error_message = "Grammar correction not available. Showing original text."
+                            error_message = "Grammar correction services unavailable. Please ensure Java is installed for offline grammar checking."
                             corrected = original_text
                     else:
                         logging.info("Grammar correction completed via Hugging Face API")
                         
-                        # Create error format for API result
+                        # Create enhanced error format for API result
                         if corrected != original_text:
                             errors = [{
-                                'message': "Grammar or style issue detected",
+                                'message': "Grammar and style corrections applied",
                                 'context': original_text,
                                 'suggestions': [corrected],
-                                'rule': "GRAMMAR_CORRECTION",
-                                'category': "Grammar"
+                                'rule': "AI_GRAMMAR_CORRECTION",
+                                'category': "Grammar",
+                                'type': 'HuggingFace_AI',
+                                'improvement': 'Comprehensive grammar and style correction'
                             }]
                         else:
-                            errors = []
+                            errors = [{
+                                'message': "No grammar issues detected",
+                                'context': original_text,
+                                'suggestions': [],
+                                'rule': "NO_ISSUES",
+                                'category': "Grammar",
+                                'type': 'HuggingFace_AI'
+                            }]
                     
             except Exception as e:
                 logging.error(f"Grammar correction error: {str(e)}")
