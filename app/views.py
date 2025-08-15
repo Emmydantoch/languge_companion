@@ -5,15 +5,45 @@ import deepl
 from deep_translator import GoogleTranslator
 import requests
 from bs4 import BeautifulSoup
+from openai import OpenAI
 
-# Remove heavy imports from top level to reduce memory usage
-# from sklearn.feature_extraction.text import TfidfVectorizer
-# from sklearn.metrics.pairwise import cosine_similarity
-# from transformers import pipeline
+
 
 def home(request):
     return render(request, "app/home.html")
 
+
+import os
+import logging
+from transformers import pipeline
+from django.shortcuts import render
+
+# Configure logging
+logging.basicConfig(level=logging.DEBUG)
+
+# Global variable for grammar correction pipeline
+grammar_corrector = None
+
+def init_grammar_corrector():
+    global grammar_corrector
+    if grammar_corrector is None:
+        try:
+            api_key = os.getenv("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")
+            if not api_key:
+                logging.error("HUGGINGFACE_API_KEY environment variable not set")
+                return None
+            logging.info("Loading grammar correction model via Hugging Face Inference API")
+            grammar_corrector = pipeline(
+                "text2text-generation",
+                model="vennify/t5-base-grammar-correction",
+                use_auth_token=api_key,
+                device=-1  # Use CPU, as Inference API handles computation
+            )
+            logging.info("Grammar correction model loaded successfully")
+        except Exception as e:
+            logging.error(f"Error loading grammar correction model: {str(e)}")
+            grammar_corrector = None
+    return grammar_corrector
 
 def grammar_check(request):
     corrected = ""
@@ -23,38 +53,41 @@ def grammar_check(request):
     
     if request.method == "POST":
         original_text = request.POST.get("text", "").strip()
+        logging.info(f"Received grammar check input: {original_text[:50]}...")
         
         if not original_text:
             error_message = "Please enter some text to check grammar."
+            logging.warning("No input text provided for grammar check")
         else:
             try:
-                # Initialize LanguageTool
-                tool = language_tool_python.LanguageTool("en-US")
-                
-                # Check for grammar errors
-                matches = tool.check(original_text)
-                
-                # Get corrected text
-                corrected = language_tool_python.utils.correct(original_text, matches)
-                
-                # Extract detailed error information
-                errors = [
-                    {
-                        'message': match.message,
-                        'context': match.context,
-                        'offset': match.offset,
-                        'length': match.errorLength,
-                        'suggestions': match.replacements[:3],  # Limit to top 3 suggestions
-                        'rule': match.ruleId,
-                        'category': match.category
-                    }
-                    for match in matches
-                ]
-                
-                # Close the tool to free resources
-                tool.close()
-                
+                # Initialize or get grammar correction model
+                model = init_grammar_corrector()
+                if model is None:
+                    logging.warning("Grammar correction model is None")
+                    error_message = "Grammar correction not available. Showing original text."
+                    corrected = original_text
+                else:
+                    # Use the model to correct grammar
+                    logging.info("Running grammar correction...")
+                    prompt = f"Correct the grammar: {original_text}"
+                    result = model(prompt, max_length=512, num_beams=4, early_stopping=True)
+                    corrected = result[0]["generated_text"]
+                    logging.info("Grammar correction completed")
+                    
+                    # Simulate error detection by comparing original and corrected text
+                    if corrected != original_text:
+                        errors = [{
+                            'message': "Grammar or style issue detected",
+                            'context': original_text,
+                            'suggestions': [corrected],
+                            'rule': "GRAMMAR_CORRECTION",
+                            'category': "Grammar"
+                        }]
+                    else:
+                        errors = []  # No changes detected
+                    
             except Exception as e:
+                logging.error(f"Grammar correction error: {str(e)}")
                 error_message = f"Error checking grammar: {str(e)}"
                 corrected = original_text  # Fallback to original text
                 
@@ -68,36 +101,54 @@ def grammar_check(request):
 def spell_check(request):
     corrected = ""
     errors = []
-    text = ""  # Initialize text variable for all request types
+    text = ""
     
     if request.method == "POST":
-        text = request.POST.get("text", "")
-        try:
-            tool = language_tool_python.LanguageTool('en-US')
-            # Check text for spelling and grammar issues
-            matches = tool.check(text)
-            # Get corrected text
-            corrected = tool.correct(text)
-            # Extract spelling errors for display (optional)
-            errors = [
-                {
-                    'word': match.context[match.offset:match.offset + match.errorLength],
-                    'suggestions': match.replacements,
-                    'message': match.message
-                }
-                for match in matches if 'spelling' in match.message.lower()
-            ]
-        except Exception as e:
-            errors = [{'message': f"Error in spell checking: {str(e)}"}]
-            corrected = text  # Fallback to original text
-        finally:
-            tool.close()  # Close the LanguageTool instance to free resources
+        text = request.POST.get("text", "").strip()
+        logging.info(f"Received spell check input: {text[:50]}...")
+        
+        if not text:
+            error_message = "Please enter some text to check spelling."
+            logging.warning("No input text provided for spell check")
+            errors = [{'message': error_message}]
+        else:
+            try:
+                # Initialize or get grammar correction model
+                model = init_grammar_corrector()
+                if model is None:
+                    logging.warning("Grammar correction model is None")
+                    errors = [{'message': "Spell checking not available. Showing original text."}]
+                    corrected = text
+                else:
+                    # Use the model to correct spelling and grammar
+                    logging.info("Running spell check...")
+                    prompt = f"Correct the spelling and grammar: {text}"
+                    result = model(prompt, max_length=512, num_beams=4, early_stopping=True)
+                    corrected = result[0]["generated_text"]
+                    logging.info("Spell check completed")
+                    
+                    # Simulate spelling error detection
+                    if corrected != text:
+                        errors = [{
+                            'word': text,  # Simplified, as model doesn't provide word-level errors
+                            'suggestions': [corrected],
+                            'message': "Spelling or grammar issue detected"
+                        }]
+                    else:
+                        errors = []
+                        
+            except Exception as e:
+                logging.error(f"Spell check error: {str(e)}")
+                errors = [{'message': f"Error in spell checking: {str(e)}"}]
+                corrected = text  # Fallback to original text
     
     return render(request, "app/spell_check.html", {
         "corrected": corrected,
-        "errors": errors,  # Pass errors for display in template
+        "errors": errors,
         "original": text
     })
+
+
 
 def translation(request):
     translated = ""
@@ -304,33 +355,51 @@ def plagiarism_checker(request):
 # Global variables to store model pipelines (lazy-loaded)
 summarizer = None
 
+import os
+import logging
+from transformers import pipeline
+
+# Configure logging
+logging.basicConfig(level=logging.DEBUG)
+summarizer = None
+
 def init_summarizer():
     global summarizer
     if summarizer is None:
         try:
-            # Import transformers only when needed
-            from transformers import pipeline
-            summarizer = pipeline("summarization", model="facebook/bart-large-cnn")
+            api_key = os.getenv("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")
+            if not api_key:
+                logging.error("Hugging Face API key environment variable not set")
+                return None
+            logging.info("Loading summarizer model via Hugging Face Inference API")
+            summarizer = pipeline(
+                "summarization",
+                model="facebook/bart-large-cnn",
+                use_auth_token=api_key,
+                device=-1  # Use CPU, as Inference API handles computation
+            )
+            logging.info("Summarizer model loaded successfully")
         except Exception as e:
-            print(f"Error loading summarizer model: {e}")
+            logging.error(f"Error loading summarizer model: {str(e)}")
             summarizer = None
     return summarizer
-
 
 def text_summarization(request):
     summary_text = ""
     error = ""
     input_text = ""
+    logging.info("Processing text_summarization request")
     if request.method == "POST":
         input_text = request.POST.get("text", "")
+        logging.info(f"Received input text: {input_text[:50]}...")
         if not input_text:
             error = "Please provide text to summarize."
+            logging.warning("No input text provided")
         else:
             try:
-                # Initialize or get summarizer model
                 model = init_summarizer()
                 if model is None:
-                    # Fallback: simple text truncation if ML model is not available
+                    logging.warning("Summarizer model is None")
                     if len(input_text) > 150:
                         summary_text = input_text[:150] + "..."
                         error = "ML summarization not available. Showing truncated text instead."
@@ -338,11 +407,13 @@ def text_summarization(request):
                         summary_text = input_text
                         error = "ML summarization not available. Showing original text."
                 else:
+                    logging.info("Running summarization...")
                     result = model(input_text, max_length=150, min_length=30, do_sample=False)
                     summary_text = result[0]["summary_text"]
+                    logging.info("Summarization completed")
             except Exception as e:
+                logging.error(f"Summarization error: {str(e)}")
                 error = f"Error summarizing text: {str(e)}"
-                # Fallback: simple text truncation
                 if len(input_text) > 150:
                     summary_text = input_text[:150] + "..."
                 else:
@@ -352,6 +423,54 @@ def text_summarization(request):
         "error": error,
         "input_text": input_text
     })
+# def init_summarizer():
+#     global summarizer
+#     if summarizer is None:
+#         try:
+#             # Import transformers only when needed
+#             from transformers import pipeline
+#             summarizer = pipeline("summarization", model="facebook/bart-large-cnn")
+#         except Exception as e:
+#             print(f"Error loading summarizer model: {e}")
+#             summarizer = None
+#     return summarizer
+
+
+# def text_summarization(request):
+#     summary_text = ""
+#     error = ""
+#     input_text = ""
+#     if request.method == "POST":
+#         input_text = request.POST.get("text", "")
+#         if not input_text:
+#             error = "Please provide text to summarize."
+#         else:
+#             try:
+#                 # Initialize or get summarizer model
+#                 model = init_summarizer()
+#                 if model is None:
+#                     # Fallback: simple text truncation if ML model is not available
+#                     if len(input_text) > 150:
+#                         summary_text = input_text[:150] + "..."
+#                         error = "ML summarization not available. Showing truncated text instead."
+#                     else:
+#                         summary_text = input_text
+#                         error = "ML summarization not available. Showing original text."
+#                 else:
+#                     result = model(input_text, max_length=150, min_length=30, do_sample=False)
+#                     summary_text = result[0]["summary_text"]
+#             except Exception as e:
+#                 error = f"Error summarizing text: {str(e)}"
+#                 # Fallback: simple text truncation
+#                 if len(input_text) > 150:
+#                     summary_text = input_text[:150] + "..."
+#                 else:
+#                     summary_text = input_text
+#     return render(request, "app/text_summarization.html", {
+#         "summary_text": summary_text,
+#         "error": error,
+#         "input_text": input_text
+#     })
     
 
 # Create your views here.
