@@ -134,6 +134,72 @@ def simple_extractive_summary(text, max_sentences=3):
         logging.error(f"Simple summary error: {str(e)}")
         return text[:200] + "..." if len(text) > 200 else text
 
+def simple_grammar_check(text):
+    """Simple grammar checking fallback that doesn't require Java/LanguageTool"""
+    try:
+        import re
+        corrected = text
+        errors = []
+        
+        # Basic grammar corrections
+        corrections = [
+            # Common contractions and spacing
+            (r'\bi\b', 'I'),  # lowercase i to uppercase I
+            (r'\bim\b', "I'm"),  # im to I'm
+            (r'\bdont\b', "don't"),  # dont to don't
+            (r'\bcant\b', "can't"),  # cant to can't
+            (r'\bwont\b', "won't"),  # wont to won't
+            (r'\bisnt\b', "isn't"),  # isnt to isn't
+            (r'\barent\b', "aren't"),  # arent to aren't
+            (r'\bwasnt\b', "wasn't"),  # wasnt to wasn't
+            (r'\bwerent\b', "weren't"),  # werent to weren't
+            (r'\bhasnt\b', "hasn't"),  # hasnt to hasn't
+            (r'\bhavent\b', "haven't"),  # havent to haven't
+            (r'\bhadnt\b', "hadn't"),  # hadnt to hadn't
+            (r'\bwouldnt\b', "wouldn't"),  # wouldnt to wouldn't
+            (r'\bcouldnt\b', "couldn't"),  # couldnt to couldn't
+            (r'\bshouldnt\b', "shouldn't"),  # shouldnt to shouldn't
+            
+            # Double spaces
+            (r'\s+', ' '),  # multiple spaces to single space
+            
+            # Sentence capitalization
+            (r'(?:^|[.!?]\s+)([a-z])', lambda m: m.group(0)[:-1] + m.group(1).upper()),
+        ]
+        
+        original_text = corrected
+        
+        # Apply corrections
+        for pattern, replacement in corrections:
+            if callable(replacement):
+                corrected = re.sub(pattern, replacement, corrected, flags=re.IGNORECASE)
+            else:
+                old_corrected = corrected
+                corrected = re.sub(pattern, replacement, corrected, flags=re.IGNORECASE)
+                
+                # Track changes for error reporting
+                if old_corrected != corrected:
+                    errors.append({
+                        'message': f"Corrected: {pattern} → {replacement}",
+                        'context': text[:50] + "..." if len(text) > 50 else text,
+                        'suggestions': [corrected],
+                        'rule': "SIMPLE_GRAMMAR",
+                        'category': "Grammar"
+                    })
+        
+        # Remove duplicate spaces and trim
+        corrected = re.sub(r'\s+', ' ', corrected).strip()
+        
+        # If no changes were made, create a generic message
+        if corrected == original_text:
+            errors = []
+        
+        return corrected, errors
+        
+    except Exception as e:
+        logging.error(f"Simple grammar check error: {str(e)}")
+        return text, []
+
 def grammar_check(request):
     corrected = ""
     original_text = ""
@@ -153,7 +219,7 @@ def grammar_check(request):
                 api_key = os.getenv("HUGGINGFACE_API_KEY")
                 if not api_key:
                     logging.warning("HUGGINGFACE_API_KEY environment variable not set")
-                    # Fallback to using language_tool_python
+                    # Try LanguageTool first, then fallback to simple grammar check
                     try:
                         tool = language_tool_python.LanguageTool('en-US')
                         matches = tool.check(original_text)
@@ -175,15 +241,22 @@ def grammar_check(request):
                         
                     except Exception as lt_error:
                         logging.error(f"LanguageTool error: {str(lt_error)}")
-                        error_message = "Grammar correction not available. Showing original text."
-                        corrected = original_text
+                        logging.info("Falling back to simple grammar check")
+                        # Fallback to simple grammar checking
+                        try:
+                            corrected, errors = simple_grammar_check(original_text)
+                            logging.info("Grammar correction completed using simple grammar check")
+                        except Exception as simple_error:
+                            logging.error(f"Simple grammar check error: {str(simple_error)}")
+                            error_message = "Grammar correction not available. Showing original text."
+                            corrected = original_text
                 else:
                     # Use Hugging Face Inference API
                     logging.info("Running grammar correction via Hugging Face API...")
                     corrected = correct_grammar_with_hf_api(original_text, api_key)
                     
                     if corrected is None:
-                        # Fallback to LanguageTool if API fails
+                        # Fallback to LanguageTool if API fails, then simple grammar check
                         try:
                             tool = language_tool_python.LanguageTool('en-US')
                             matches = tool.check(original_text)
@@ -205,8 +278,15 @@ def grammar_check(request):
                             
                         except Exception as lt_error:
                             logging.error(f"LanguageTool fallback error: {str(lt_error)}")
-                            error_message = "Grammar correction not available. Showing original text."
-                            corrected = original_text
+                            logging.info("Falling back to simple grammar check")
+                            # Final fallback to simple grammar checking
+                            try:
+                                corrected, errors = simple_grammar_check(original_text)
+                                logging.info("Grammar correction completed using simple grammar check fallback")
+                            except Exception as simple_error:
+                                logging.error(f"Simple grammar check fallback error: {str(simple_error)}")
+                                error_message = "Grammar correction not available. Showing original text."
+                                corrected = original_text
                     else:
                         logging.info("Grammar correction completed via Hugging Face API")
                         
