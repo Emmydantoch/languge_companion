@@ -569,11 +569,9 @@ summarizer = None
 
 import os
 import logging
-from transformers import pipeline
 
 # Configure logging
 logging.basicConfig(level=logging.DEBUG)
-summarizer = None
 
 def text_summarization(request):
     summary_text = ""
