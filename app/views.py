@@ -26,28 +26,51 @@ logging.basicConfig(level=logging.DEBUG)
 def correct_grammar_with_hf_api(text, api_key):
     """Use Hugging Face Inference API for grammar correction"""
     try:
-        API_URL = "https://api-inference.huggingface.co/models/vennify/t5-base-grammar-correction"
+        # Updated to use a more reliable grammar correction model
+        API_URL = "https://api-inference.huggingface.co/models/grammarly/coedit-large"
         headers = {"Authorization": f"Bearer {api_key}"}
         
-        payload = {
-            "inputs": f"grammar: {text}",
-            "parameters": {
-                "max_length": 512,
-                "num_beams": 4,
-                "early_stopping": True
-            }
-        }
+        # Try multiple models in case one fails
+        models_to_try = [
+            "grammarly/coedit-large",
+            "pszemraj/flan-t5-large-grammar-synthesis",
+            "Unbabel/gec-t5_small"
+        ]
         
-        response = requests.post(API_URL, headers=headers, json=payload)
+        for model in models_to_try:
+            try:
+                API_URL = f"https://api-inference.huggingface.co/models/{model}"
+                
+                payload = {
+                    "inputs": text,
+                    "parameters": {
+                        "max_length": min(512, len(text) + 100),
+                        "temperature": 0.1,
+                        "do_sample": False
+                    }
+                }
+                
+                response = requests.post(API_URL, headers=headers, json=payload, timeout=30)
+                
+                if response.status_code == 200:
+                    result = response.json()
+                    if isinstance(result, list) and len(result) > 0:
+                        corrected = result[0].get("generated_text", text)
+                        if corrected and corrected != text:
+                            return corrected
+                    elif isinstance(result, dict) and "generated_text" in result:
+                        return result["generated_text"]
+                else:
+                    logging.warning(f"Model {model} failed: {response.status_code}")
+                    continue
+                    
+            except Exception as model_error:
+                logging.warning(f"Model {model} error: {str(model_error)}")
+                continue
         
-        if response.status_code == 200:
-            result = response.json()
-            if isinstance(result, list) and len(result) > 0:
-                return result[0].get("generated_text", text)
-            return text
-        else:
-            logging.error(f"Hugging Face API error: {response.status_code} - {response.text}")
-            return None
+        # If all models fail
+        logging.error("All Hugging Face models failed")
+        return None
             
     except Exception as e:
         logging.error(f"Error calling Hugging Face API: {str(e)}")
@@ -56,29 +79,48 @@ def correct_grammar_with_hf_api(text, api_key):
 def correct_spelling_with_hf_api(text, api_key):
     """Use Hugging Face Inference API for spelling correction"""
     try:
-        # Using a spelling correction model
-        API_URL = "https://api-inference.huggingface.co/models/oliverguhr/spelling-correction-english-base"
-        headers = {"Authorization": f"Bearer {api_key}"}
+        # Try multiple spelling correction models
+        models_to_try = [
+            "oliverguhr/spelling-correction-english-base",
+            "prithivida/spelling-correction-english",
+            "microsoft/DialoGPT-medium"
+        ]
         
-        payload = {
-            "inputs": text,
-            "parameters": {
-                "max_length": 512,
-                "num_beams": 4,
-                "early_stopping": True
-            }
-        }
+        for model in models_to_try:
+            try:
+                API_URL = f"https://api-inference.huggingface.co/models/{model}"
+                headers = {"Authorization": f"Bearer {api_key}"}
+                
+                payload = {
+                    "inputs": text,
+                    "parameters": {
+                        "max_length": min(512, len(text) + 50),
+                        "temperature": 0.1,
+                        "do_sample": False
+                    }
+                }
+                
+                response = requests.post(API_URL, headers=headers, json=payload, timeout=30)
+                
+                if response.status_code == 200:
+                    result = response.json()
+                    if isinstance(result, list) and len(result) > 0:
+                        corrected = result[0].get("generated_text", text)
+                        if corrected and corrected != text:
+                            return corrected
+                    elif isinstance(result, dict) and "generated_text" in result:
+                        return result["generated_text"]
+                else:
+                    logging.warning(f"Spelling model {model} failed: {response.status_code}")
+                    continue
+                    
+            except Exception as model_error:
+                logging.warning(f"Spelling model {model} error: {str(model_error)}")
+                continue
         
-        response = requests.post(API_URL, headers=headers, json=payload)
-        
-        if response.status_code == 200:
-            result = response.json()
-            if isinstance(result, list) and len(result) > 0:
-                return result[0].get("generated_text", text)
-            return text
-        else:
-            logging.error(f"Hugging Face Spelling API error: {response.status_code} - {response.text}")
-            return None
+        # If all models fail
+        logging.error("All Hugging Face spelling models failed")
+        return None
             
     except Exception as e:
         logging.error(f"Error calling Hugging Face Spelling API: {str(e)}")
@@ -307,77 +349,33 @@ def grammar_check(request):
         else:
             try:
                 # Get Hugging Face API key
-                api_key = os.getenv("HUGGINGFACE_API_KEY")
+                api_key = os.getenv("HUGGINGFACE_API_KEY") or os.getenv("HF_TOKEN")
                 if not api_key:
-                    logging.warning("HUGGINGFACE_API_KEY environment variable not set")
-                    # Try LanguageTool first, then fallback to simple grammar check
+                    logging.warning("HUGGINGFACE_API_KEY/HF_TOKEN environment variable not set")
+                    # Skip LanguageTool since Java isn't available on Render, go straight to simple grammar check
+                    logging.info("Falling back to simple grammar check (Java not available)")
                     try:
-                        tool = language_tool_python.LanguageTool('en-US')
-                        matches = tool.check(original_text)
-                        corrected = tool.correct(original_text)
-                        
-                        # Convert matches to errors format
-                        errors = []
-                        for match in matches:
-                            errors.append({
-                                'message': match.message,
-                                'context': match.context,
-                                'suggestions': match.replacements[:3],  # Limit to 3 suggestions
-                                'rule': match.ruleId,
-                                'category': match.category
-                            })
-                        
-                        logging.info("Grammar correction completed using LanguageTool")
-                        tool.close()
-                        
-                    except Exception as lt_error:
-                        logging.error(f"LanguageTool error: {str(lt_error)}")
-                        logging.info("Falling back to simple grammar check")
-                        # Fallback to simple grammar checking
-                        try:
-                            corrected, errors = simple_grammar_check(original_text)
-                            logging.info("Grammar correction completed using simple grammar check")
-                        except Exception as simple_error:
-                            logging.error(f"Simple grammar check error: {str(simple_error)}")
-                            error_message = "Grammar correction not available. Showing original text."
-                            corrected = original_text
+                        corrected, errors = simple_grammar_check(original_text)
+                        logging.info("Grammar correction completed using simple grammar check")
+                    except Exception as simple_error:
+                        logging.error(f"Simple grammar check error: {str(simple_error)}")
+                        error_message = "Grammar correction not available. Showing original text."
+                        corrected = original_text
                 else:
                     # Use Hugging Face Inference API
                     logging.info("Running grammar correction via Hugging Face API...")
                     corrected = correct_grammar_with_hf_api(original_text, api_key)
                     
                     if corrected is None:
-                        # Fallback to LanguageTool if API fails, then simple grammar check
+                        # Skip LanguageTool since Java isn't available, go straight to simple grammar check
+                        logging.info("Hugging Face API failed, falling back to simple grammar check")
                         try:
-                            tool = language_tool_python.LanguageTool('en-US')
-                            matches = tool.check(original_text)
-                            corrected = tool.correct(original_text)
-                            
-                            # Convert matches to errors format
-                            errors = []
-                            for match in matches:
-                                errors.append({
-                                    'message': match.message,
-                                    'context': match.context,
-                                    'suggestions': match.replacements[:3],
-                                    'rule': match.ruleId,
-                                    'category': match.category
-                                })
-                            
-                            logging.info("Grammar correction completed using LanguageTool fallback")
-                            tool.close()
-                            
-                        except Exception as lt_error:
-                            logging.error(f"LanguageTool fallback error: {str(lt_error)}")
-                            logging.info("Falling back to simple grammar check")
-                            # Final fallback to simple grammar checking
-                            try:
-                                corrected, errors = simple_grammar_check(original_text)
-                                logging.info("Grammar correction completed using simple grammar check fallback")
-                            except Exception as simple_error:
-                                logging.error(f"Simple grammar check fallback error: {str(simple_error)}")
-                                error_message = "Grammar correction not available. Showing original text."
-                                corrected = original_text
+                            corrected, errors = simple_grammar_check(original_text)
+                            logging.info("Grammar correction completed using simple grammar check fallback")
+                        except Exception as simple_error:
+                            logging.error(f"Simple grammar check fallback error: {str(simple_error)}")
+                            error_message = "Grammar correction not available. Showing original text."
+                            corrected = original_text
                     else:
                         logging.info("Grammar correction completed via Hugging Face API")
                         
@@ -421,103 +419,33 @@ def spell_check(request):
         else:
             try:
                 # Get Hugging Face API key
-                api_key = os.getenv("HUGGINGFACE_API_KEY")
+                api_key = os.getenv("HUGGINGFACE_API_KEY") or os.getenv("HF_TOKEN")
                 if not api_key:
-                    logging.warning("HUGGINGFACE_API_KEY environment variable not set")
-                    # Fallback to using language_tool_python for spelling
+                    logging.warning("HUGGINGFACE_API_KEY/HF_TOKEN environment variable not set")
+                    # Skip LanguageTool since Java isn't available on Render, go straight to simple spell check
+                    logging.info("Falling back to simple spell check (Java not available)")
                     try:
-                        tool = language_tool_python.LanguageTool('en-US')
-                        matches = tool.check(text)
-                        corrected = tool.correct(text)
-                        
-                        # Convert matches to errors format for spelling
-                        errors = []
-                        for match in matches:
-                            # Focus on spelling-related errors
-                            if 'SPELL' in match.ruleId or 'TYPO' in match.ruleId or match.category == 'TYPOS':
-                                errors.append({
-                                    'word': match.context,
-                                    'suggestions': match.replacements[:5],  # Show up to 5 suggestions
-                                    'message': match.message,
-                                    'rule': match.ruleId,
-                                    'category': match.category
-                                })
-                        
-                        # If no spelling errors found, show all errors
-                        if not errors:
-                            for match in matches:
-                                errors.append({
-                                    'word': match.context,
-                                    'suggestions': match.replacements[:3],
-                                    'message': match.message,
-                                    'rule': match.ruleId,
-                                    'category': match.category
-                                })
-                        
-                        logging.info("Spell check completed using LanguageTool")
-                        tool.close()
-                        
-                    except Exception as lt_error:
-                        logging.error(f"LanguageTool spelling error: {str(lt_error)}")
-                        logging.info("Falling back to simple spell check")
-                        # Fallback to simple spell checking
-                        try:
-                            corrected, errors = simple_spell_check(text)
-                            logging.info("Spell check completed using simple spell check")
-                        except Exception as simple_error:
-                            logging.error(f"Simple spell check error: {str(simple_error)}")
-                            error_message = "Spell checking not available. Showing original text."
-                            corrected = text
+                        corrected, errors = simple_spell_check(text)
+                        logging.info("Spell check completed using simple spell check")
+                    except Exception as simple_error:
+                        logging.error(f"Simple spell check error: {str(simple_error)}")
+                        error_message = "Spell checking not available. Showing original text."
+                        corrected = text
                 else:
                     # Use Hugging Face Inference API for spelling
                     logging.info("Running spell check via Hugging Face API...")
                     corrected = correct_spelling_with_hf_api(text, api_key)
                     
                     if corrected is None:
-                        # Fallback to LanguageTool if API fails
+                        # Skip LanguageTool since Java isn't available, go straight to simple spell check
+                        logging.info("Hugging Face API failed, falling back to simple spell check")
                         try:
-                            tool = language_tool_python.LanguageTool('en-US')
-                            matches = tool.check(text)
-                            corrected = tool.correct(text)
-                            
-                            # Convert matches to errors format for spelling
-                            errors = []
-                            for match in matches:
-                                # Focus on spelling-related errors
-                                if 'SPELL' in match.ruleId or 'TYPO' in match.ruleId or match.category == 'TYPOS':
-                                    errors.append({
-                                        'word': match.context,
-                                        'suggestions': match.replacements[:5],
-                                        'message': match.message,
-                                        'rule': match.ruleId,
-                                        'category': match.category
-                                    })
-                            
-                            # If no spelling errors found, show all errors
-                            if not errors:
-                                for match in matches:
-                                    errors.append({
-                                        'word': match.context,
-                                        'suggestions': match.replacements[:3],
-                                        'message': match.message,
-                                        'rule': match.ruleId,
-                                        'category': match.category
-                                    })
-                            
-                            logging.info("Spell check completed using LanguageTool fallback")
-                            tool.close()
-                            
-                        except Exception as lt_error:
-                            logging.error(f"LanguageTool spelling fallback error: {str(lt_error)}")
-                            logging.info("Falling back to simple spell check")
-                            # Final fallback to simple spell checking
-                            try:
-                                corrected, errors = simple_spell_check(text)
-                                logging.info("Spell check completed using simple spell check fallback")
-                            except Exception as simple_error:
-                                logging.error(f"Simple spell check fallback error: {str(simple_error)}")
-                                error_message = "Spell checking not available. Showing original text."
-                                corrected = text
+                            corrected, errors = simple_spell_check(text)
+                            logging.info("Spell check completed using simple spell check fallback")
+                        except Exception as simple_error:
+                            logging.error(f"Simple spell check fallback error: {str(simple_error)}")
+                            error_message = "Spell checking not available. Showing original text."
+                            corrected = text
                     else:
                         logging.info("Spell check completed via Hugging Face API")
                         
